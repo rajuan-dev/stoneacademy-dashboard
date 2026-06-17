@@ -21,7 +21,7 @@ export const getPageBySlug = ({ slug }) =>
   apiRequest(createPath("/cms/pages/:slug", { slug }), { auth: false });
 
 export const getTermsOfServicePage = () =>
-  apiRequest("/cms/pages/terms-of-service", { auth: false });
+  apiRequest("/cms/pages/terms-and-conditions", { auth: false });
 
 export const getCmsPrivacyPolicyPage = () =>
   apiRequest("/cms/pages/privacy-policy", { auth: false });
