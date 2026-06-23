@@ -1,7 +1,7 @@
-import { Form, Input, Checkbox, Typography, message } from "antd";
+import { Form, Input, Typography, message } from "antd";
 import { FaRegEyeSlash } from "react-icons/fa";
 import { FaRegEye } from "react-icons/fa6";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import brandlogo from "../../../assets/image/stone-logo.png";
 
@@ -21,7 +21,7 @@ const NewPass = () => {
 
   const onFinish = async (values) => {
     setLoading(true);
-    const { email, newPassword, confirmPassword } = values;
+    const { newPassword, confirmPassword } = values;
 
     // Simulate API call
     setTimeout(() => {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Form, Input, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import brandlogo from "../../../assets/image/imagepng.png";
@@ -7,7 +7,7 @@ const ForgatePassword = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  const onFinish = (values) => {
+  const onFinish = () => {
     setLoading(true);
     // Simulate sending reset email
     setTimeout(() => {

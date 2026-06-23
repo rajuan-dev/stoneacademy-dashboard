@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { EyeOutlined } from "@ant-design/icons";
 import { IoIosArrowBack, IoIosArrowForward, IoIosCheckmarkCircle, IoMdClose } from "react-icons/io";
 import { MdBlock } from "react-icons/md";
-// import userImage from "../../assets/image/admin.jpg";
-// import nid from "../../assets/image/NID.png";
+
+const userImage = "https://placehold.co/44x44?text=U";
+const nid = "https://placehold.co/320x180?text=NID%2FLicence";
 
 
 function UserRequest() {
@@ -305,8 +306,8 @@ function UserRequest() {
               </tr>
             </thead>
             <tbody>
-              {currentUsers.map((user, index) => (
-                <tr key={index} className="bg-[#4BADC9] ">
+              {currentUsers.map((user) => (
+                <tr key={user.id} className="bg-[#4BADC9] ">
                   <td className="px-4 my-3 text-white">{user.id}</td>
                  
                   <td className="px-4 my-3 overflow-hidden text-white w-11 h-11">
@@ -466,10 +467,6 @@ function UserRequest() {
               {/* Modal Close Button */}
               <button
                 onClick={() => setIsModalBlock(false)}
-                this
-                close
-                not
-                working
                 className="absolute p-1 rounded-full right-2 top-2 bg-white/10 hover:bg-white/20"
               >
                 <IoMdClose />
@@ -506,10 +503,6 @@ function UserRequest() {
               {/* Modal Close Button */}
               <button
                 onClick={() => setIsModalAccept(false)}
-                this
-                close
-                not
-                working
                 className="absolute p-1 rounded-full right-2 top-2 bg-white/10 hover:bg-white/20"
               >
                 <IoMdClose />
