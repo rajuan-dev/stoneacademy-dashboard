@@ -6,7 +6,7 @@ export * from "./shopApi";
 export * from "./reportsApi";
 export * from "./earningsApi";
 export * from "./categoriesApi";
-export * from "./adsApi";
+export * from "./sponsoredContentApi";
 export * from "./activitiesApi";
 export * from "./eventCreatorsApi";
 export * from "./notificationsApi";

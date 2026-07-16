@@ -3,118 +3,92 @@ import { Edit, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { MdDelete } from "react-icons/md";
 import { CiPower } from "react-icons/ci";
 import {
-  adminCreateProduct,
-  adminDeleteProduct,
-  adminListProducts,
-  adminToggleProductStatus,
-  adminUpdateProduct,
-} from "../../services/shopApi";
+  createAd,
+  deleteAd,
+  listAds,
+  updateAd,
+  updateAdStatus,
+} from "../../services/sponsoredContentApi";
 
-const defaultCategories = [
-  "Protein",
-  "Fitness Tracker",
-  "Sport Earbuds",
-  "Premium Yoga Mat",
-  "Supplements",
-  "Accessories",
-];
+const AD_IMAGE_PLACEHOLDER = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+    <rect width="640" height="360" fill="#eef4fb"/>
+    <rect x="72" y="72" width="496" height="216" rx="24" fill="#dbe8f6" stroke="#b9d1eb" stroke-width="4"/>
+    <circle cx="220" cy="154" r="26" fill="#8fb5de"/>
+    <path d="M140 246l96-92 74 70 54-48 136 70H140z" fill="#71ABE0"/>
+    <text x="320" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#4f6f91">Ad Preview</text>
+  </svg>`,
+)}`;
 
 const createBlankAdForm = () => ({
   id: null,
+  name: "",
   category: "",
-  productName: "",
   description: "",
   price: "",
-  url: "",
-  isActive: false,
-  image: "",
+  imageUrl: "",
   imageFile: null,
+  linkUrl: "",
+  country: "",
+  state: "",
+  city: "",
+  status: "active",
 });
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
+const normalizeAds = (payload) => {
+  const items = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.data?.items)
+      ? payload.data.items
+      : Array.isArray(payload?.items)
+        ? payload.items
+        : Array.isArray(payload)
+          ? payload
+          : [];
+
+  return items.map((item) => ({
+    id: String(item?._id || item?.id || ""),
+    name: item?.name || "",
+    category: item?.category || "",
+    description: item?.description || "",
+    price: item?.price ?? 0,
+    imageUrl: item?.imageUrl || "",
+    linkUrl: item?.linkUrl || "",
+    country: item?.country || "",
+    state: item?.state || "",
+    city: item?.city || "",
+    status: item?.status || "active",
+    isActive: item?.status === "active",
+    createdAt: item?.createdAt || null,
+  }));
+};
+
+const createPayload = (formData) => ({
+  name: formData.name.trim(),
+  category: formData.category.trim() || undefined,
+  description: formData.description.trim() || undefined,
+  price: formData.price === "" ? 0 : Number.parseFloat(formData.price) || 0,
+  linkUrl: formData.linkUrl.trim(),
+  country: formData.country.trim(),
+  state: formData.state.trim() || undefined,
+  city: formData.city.trim() || undefined,
+  status: formData.status,
 });
 
-const formatPrice = (value) => {
-  if (value === "" || value === undefined || value === null) return "--";
-  const numeric = Number.parseFloat(value);
-  if (Number.isNaN(numeric)) {
-    return typeof value === "string" && value.trim() ? value : "--";
-  }
-  return currencyFormatter.format(numeric);
-};
+const createMultipartPayload = (formData) => {
+  const payload = createPayload(formData);
+  const multipart = new FormData();
 
-const parsePriceValue = (value) => {
-  const numeric = Number.parseFloat(value);
-  return Number.isNaN(numeric) ? 0 : numeric;
-};
-
-const extractItems = (payload) => {
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.data?.items)) return payload.data.items;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload)) return payload;
-  return [];
-};
-
-const toBooleanFilter = (value) => {
-  if (value === "active") return true;
-  if (value === "inactive") return false;
-  return undefined;
-};
-
-const normalizeProducts = (payload) => {
-  const items = extractItems(payload);
-  return items.map((item) => {
-    const id = item?.id || item?._id;
-    return {
-      id: String(id || ""),
-      category: item?.category || "",
-      productName: item?.name || "",
-      description: item?.description || "",
-      price: item?.price ?? "",
-      url: item?.ctaUrl || item?.destinationUrl || "",
-      isActive: Boolean(item?.isActive),
-      image: item?.imageUrl || "",
-      createdAt: item?.createdAt || null,
-    };
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    multipart.append(key, String(value));
   });
-};
 
-const buildProductPayload = (formData, { withImage }) => {
-  const parsedPrice = Number.parseFloat(formData.price);
-  const price = Number.isNaN(parsedPrice) ? 0 : parsedPrice;
-  const payload = {
-    name: formData.productName.trim(),
-    category: formData.category.trim() || undefined,
-    description: formData.description.trim() || undefined,
-    price,
-    destinationUrl: formData.url.trim(),
-    imageUrl:
-      formData.image && typeof formData.image === "string" && !formData.image.startsWith("data:")
-        ? formData.image
-        : undefined,
-    isActive: Boolean(formData.isActive),
-    stock: 0,
-  };
-
-  if (withImage) {
-    const body = new FormData();
-    body.append("name", payload.name);
-    if (payload.category) body.append("category", payload.category);
-    if (payload.description) body.append("description", payload.description);
-    body.append("price", String(payload.price));
-    body.append("destinationUrl", payload.destinationUrl);
-    if (payload.imageUrl) body.append("imageUrl", payload.imageUrl);
-    body.append("isActive", String(payload.isActive));
-    body.append("stock", String(payload.stock));
-    body.append("image", formData.imageFile);
-    return body;
+  if (formData.imageFile) {
+    multipart.append("image", formData.imageFile);
   }
 
-  return payload;
+  return multipart;
 };
 
 const normalizeUrlInput = (value) => {
@@ -137,91 +111,85 @@ const AdsSetup = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState(createBlankAdForm());
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const placeholderImage =
-    "https://via.placeholder.com/400x240.png?text=Ad+Preview";
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   const loadAds = useCallback(async () => {
     try {
       setIsLoading(true);
-      const payload = await adminListProducts({
+      const payload = await listAds({
         page: 1,
         limit: 100,
-        q: searchTerm.trim() || undefined,
-        category: categoryFilter === "all" ? undefined : categoryFilter,
-        active: toBooleanFilter(statusFilter),
+        status: statusFilter === "all" ? undefined : statusFilter,
       });
-      setAds(normalizeProducts(payload));
+      setAds(normalizeAds(payload));
     } catch {
       setAds([]);
     } finally {
       setIsLoading(false);
     }
-  }, [searchTerm, categoryFilter, statusFilter]);
+  }, [statusFilter]);
 
   useEffect(() => {
     loadAds();
   }, [loadAds]);
 
-  const categoryOptions = useMemo(() => {
-    const seen = new Map();
-    [...defaultCategories, ...ads.map((ad) => ad.category || "")].forEach((category) => {
-      const normalized = category.trim();
-      if (!normalized) return;
-      const key = normalized.toLowerCase();
-      if (!seen.has(key)) {
-        seen.set(key, normalized);
-      }
-    });
-    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
-  }, [ads]);
-
   const stats = useMemo(() => {
-    const totalValue = ads.reduce((sum, ad) => sum + parsePriceValue(ad.price), 0);
     const activeCount = ads.filter((ad) => ad.isActive).length;
-    const categoriesInUse = new Set(
-      ads.map((ad) => ad.category).filter((category) => Boolean(category))
+    const countriesLive = new Set(ads.map((ad) => ad.country).filter(Boolean)).size;
+    const citiesLive = new Set(
+      ads.map((ad) => `${ad.country}-${ad.state}-${ad.city}`).filter(Boolean),
     ).size;
-    const averagePrice = ads.length ? totalValue / ads.length : 0;
 
     return {
-      totalValue,
       activeCount,
-      categoriesInUse,
-      averagePrice,
+      countriesLive,
+      citiesLive,
     };
   }, [ads]);
 
   const displayAds = useMemo(() => {
-    return [...ads].sort((a, b) => {
-      if (sortBy === "price-desc") {
-        return parsePriceValue(b.price) - parsePriceValue(a.price);
-      }
-      if (sortBy === "price-asc") {
-        return parsePriceValue(a.price) - parsePriceValue(b.price);
-      }
-      if (sortBy === "name-asc") {
-        return (a.productName || "").localeCompare(b.productName || "");
-      }
+    const keyword = searchTerm.trim().toLowerCase();
+    const filtered = keyword
+      ? ads.filter((ad) =>
+          [
+            ad.name,
+            ad.category,
+            ad.description,
+            ad.linkUrl,
+            ad.country,
+            ad.state,
+            ad.city,
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(keyword)),
+        )
+      : ads;
 
+    return [...filtered].sort((a, b) => {
+      if (sortBy === "name-asc") {
+        return a.name.localeCompare(b.name);
+      }
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return bTime - aTime;
     });
-  }, [ads, sortBy]);
+  }, [ads, searchTerm, sortBy]);
 
-  const handleInputChange = (field, value) =>
+  const handleInputChange = (field, value) => {
+    if (field === "imageUrl") {
+      setPreviewFailed(false);
+    }
     setFormData((prev) => ({
       ...prev,
+      imageFile: field === "imageUrl" ? null : prev.imageFile,
       [field]: value,
     }));
-
-  const resetForm = () => setFormData(createBlankAdForm());
+  };
 
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
@@ -229,57 +197,60 @@ const AdsSetup = () => {
 
     const reader = new FileReader();
     reader.onloadend = () => {
+      setPreviewFailed(false);
       setFormData((prev) => ({
         ...prev,
-        image: reader.result ?? "",
+        imageUrl: reader.result ?? "",
         imageFile: file,
       }));
     };
     reader.readAsDataURL(file);
   };
 
+  const resetForm = () => setFormData(createBlankAdForm());
+
+  const handleCreate = () => {
+    setPreviewFailed(false);
+    resetForm();
+    setEditingAd(null);
+    setIsCreating(true);
+  };
+
   const handleEdit = (ad) => {
-    setEditingAd(ad);
+    setPreviewFailed(false);
     setIsCreating(false);
+    setEditingAd(ad);
     setFormData({
       id: ad.id,
-      category: ad.category || "",
-      productName: ad.productName || "",
-      description: ad.description || "",
-      price:
-        ad.price === undefined || ad.price === null ? "" : ad.price.toString(),
-      url: ad.url || "",
-      isActive: ad.isActive ?? false,
-      image: ad.image || "",
+      name: ad.name,
+      category: ad.category,
+      description: ad.description,
+      price: ad.price === 0 ? "" : String(ad.price),
+      imageUrl: ad.imageUrl,
       imageFile: null,
+      linkUrl: ad.linkUrl,
+      country: ad.country,
+      state: ad.state,
+      city: ad.city,
+      status: ad.status || "active",
     });
   };
 
-  const handleDelete = (ad) => setDeletingAd(ad);
-
-  const handleCreate = () => {
-    setIsCreating(true);
+  const closeModal = () => {
+    setPreviewFailed(false);
     setEditingAd(null);
-    resetForm();
-  };
-
-  const closeEditModal = () => {
-    setEditingAd(null);
-    resetForm();
-  };
-
-  const closeDeleteModal = () => setDeletingAd(null);
-
-  const closeCreateModal = () => {
     setIsCreating(false);
     resetForm();
   };
 
+  const handleDelete = (ad) => setDeletingAd(ad);
+  const closeDeleteModal = () => setDeletingAd(null);
+
   const handleInlineStatusToggle = async (ad) => {
     try {
-      await adminToggleProductStatus({
-        productId: ad.id,
-        status: !ad.isActive,
+      await updateAdStatus({
+        id: ad.id,
+        body: { status: ad.isActive ? "expired" : "active" },
       });
       await loadAds();
     } catch {
@@ -291,7 +262,7 @@ const AdsSetup = () => {
     if (!deletingAd) return;
     try {
       setIsDeleting(true);
-      await adminDeleteProduct({ productId: deletingAd.id });
+      await deleteAd({ id: deletingAd.id });
       setDeletingAd(null);
       await loadAds();
     } catch {
@@ -302,19 +273,32 @@ const AdsSetup = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.productName.trim()) {
+    if (!formData.name.trim()) {
       alert("Product name is required");
       return;
     }
-    if (!formData.url.trim()) {
-      alert("Destination URL is required");
+    if (!formData.category.trim()) {
+      alert("Category is required");
       return;
     }
-    if (formData.price === "" || Number.isNaN(Number(formData.price))) {
-      alert("Valid price is required");
+    if (formData.price === "" || Number.parseFloat(formData.price) < 0) {
+      alert("Price is required");
       return;
     }
-    const normalizedUrl = normalizeUrlInput(formData.url);
+    if (!formData.linkUrl.trim()) {
+      alert("URL is required");
+      return;
+    }
+    if (!formData.country.trim()) {
+      alert("Country is required");
+      return;
+    }
+    if (!formData.imageFile && !formData.imageUrl.trim()) {
+      alert("Ad image is required");
+      return;
+    }
+
+    const normalizedUrl = normalizeUrlInput(formData.linkUrl);
     if (!normalizedUrl) {
       alert("Please enter a valid destination URL");
       return;
@@ -322,24 +306,21 @@ const AdsSetup = () => {
 
     try {
       setIsSaving(true);
-      const preparedForm = {
+      const nextFormState = {
         ...formData,
-        url: normalizedUrl,
+        linkUrl: normalizedUrl,
       };
+      const payload = formData.imageFile
+        ? createMultipartPayload(nextFormState)
+        : createPayload(nextFormState);
+
       if (editingAd) {
-        const body = buildProductPayload(preparedForm, {
-          withImage: Boolean(formData.imageFile),
-        });
-        await adminUpdateProduct({
-          productId: editingAd.id,
-          body,
-        });
-        closeEditModal();
+        await updateAd({ id: editingAd.id, body: payload });
       } else {
-        const body = buildProductPayload(preparedForm, { withImage: true });
-        await adminCreateProduct(body);
-        closeCreateModal();
+        await createAd(payload);
       }
+
+      closeModal();
       await loadAds();
     } catch (error) {
       alert(error?.message || "Failed to save ad");
@@ -360,7 +341,7 @@ const AdsSetup = () => {
               Ads Setup Workspace
             </h1>
             <p className="text-sm text-gray-500">
-              Search, filter, and optimize every placement from one view.
+              Manage sponsored ads with country, state, and city targeting.
             </p>
           </div>
           <button
@@ -380,19 +361,14 @@ const AdsSetup = () => {
             <p className="text-sm text-gray-500">{stats.activeCount} of {ads.length} live</p>
           </div>
           <div className="p-4 bg-[#F4F8FC] rounded-xl">
-            <p className="text-xs font-medium text-gray-500 uppercase">Catalog Value</p>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">{formatPrice(stats.totalValue)}</p>
-            <p className="text-sm text-gray-500">Combined price across ads</p>
+            <p className="text-xs font-medium text-gray-500 uppercase">Countries Live</p>
+            <p className="mt-2 text-3xl font-semibold text-gray-900">{stats.countriesLive}</p>
+            <p className="text-sm text-gray-500">Geographies with active catalog coverage</p>
           </div>
           <div className="p-4 bg-[#F4F8FC] rounded-xl">
-            <p className="text-xs font-medium text-gray-500 uppercase">Avg. Product Price</p>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">{formatPrice(stats.averagePrice)}</p>
-            <p className="text-sm text-gray-500">Based on current catalog</p>
-          </div>
-          <div className="p-4 bg-[#F4F8FC] rounded-xl">
-            <p className="text-xs font-medium text-gray-500 uppercase">Categories Live</p>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">{stats.categoriesInUse}</p>
-            <p className="text-sm text-gray-500">Unique categories in rotation</p>
+            <p className="text-xs font-medium text-gray-500 uppercase">City Targets</p>
+            <p className="mt-2 text-3xl font-semibold text-gray-900">{stats.citiesLive}</p>
+            <p className="text-sm text-gray-500">Unique country/state/city combinations</p>
           </div>
         </div>
       </section>
@@ -404,7 +380,7 @@ const AdsSetup = () => {
             <span>Showing {displayAds.length} ads</span>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
                 Keyword Search
@@ -415,26 +391,10 @@ const AdsSetup = () => {
                   type="search"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by product, copy, or URL"
+                  placeholder="Search by name, URL, or location"
                   className="w-full py-3 pl-11 pr-4 text-sm bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
                 />
               </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
-                Category
-              </label>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
-              >
-                <option value="all">All categories</option>
-                {categoryOptions.map((category) => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -448,7 +408,7 @@ const AdsSetup = () => {
               >
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="expired">Expired</option>
               </select>
             </div>
 
@@ -462,8 +422,6 @@ const AdsSetup = () => {
                 className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
               >
                 <option value="recent">Newest first</option>
-                <option value="price-desc">Price: High to Low</option>
-                <option value="price-asc">Price: Low to High</option>
                 <option value="name-asc">Alphabetical</option>
               </select>
             </div>
@@ -487,9 +445,8 @@ const AdsSetup = () => {
                 <thead className="text-xs font-semibold tracking-wide text-gray-500 uppercase bg-gray-50">
                   <tr>
                     <th className="px-6 py-4">ID</th>
-                    <th className="px-6 py-4">Product</th>
-                    <th className="px-6 py-4">Category</th>
-                    <th className="px-6 py-4">Price</th>
+                    <th className="px-6 py-4">Ad</th>
+                    <th className="px-6 py-4">Targeting</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Action</th>
                   </tr>
@@ -503,27 +460,28 @@ const AdsSetup = () => {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <img
-                            src={ad.image || placeholderImage}
-                            alt={ad.productName || "Ad creative"}
+                            src={ad.imageUrl || AD_IMAGE_PLACEHOLDER}
+                            alt={ad.name || "Ad creative"}
                             className="object-cover rounded-lg w-12 h-12"
                           />
                           <div>
                             <p className="font-semibold text-gray-900">
-                              {ad.productName || "Untitled"}
+                              {ad.name || "Untitled"}
                             </p>
-                            <p className="text-xs text-gray-500 max-w-[220px] truncate">
-                              {ad.description || "No description"}
+                            <p className="text-xs text-gray-500 max-w-[240px] truncate">
+                              {ad.category || "No category"}
+                            </p>
+                            <p className="text-xs text-gray-500 max-w-[240px] truncate">
+                              {ad.linkUrl || "No URL"}
                             </p>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-[#E9F2FB] text-[#71ABE0]">
-                          {ad.category || "Uncategorized"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-gray-900">
-                        {formatPrice(ad.price)}
+                        <p className="font-medium text-gray-800">{ad.country || "No country"}</p>
+                        <p className="text-xs text-gray-500">
+                          {[ad.state, ad.city].filter(Boolean).join(" / ") || "All subregions"}
+                        </p>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -543,7 +501,7 @@ const AdsSetup = () => {
                                 : "bg-gray-100 text-gray-600"
                             }`}
                           >
-                            {ad.isActive ? "Active" : "Inactive"}
+                            {ad.isActive ? "Active" : "Expired"}
                           </span>
                         </div>
                       </td>
@@ -579,106 +537,145 @@ const AdsSetup = () => {
       {(isCreating || editingAd) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-black bg-opacity-40"
-          onClick={isCreating ? closeCreateModal : closeEditModal}
+          onClick={closeModal}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-lg bg-white p-4 shadow-lg sm:p-6 md:p-8"
+            className="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-8"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-[#71ABE0] sm:text-2xl">
-                {isCreating ? "Create New Ad" : "Edit Ad"}
-              </h3>
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-2xl font-semibold text-[#71ABE0] sm:text-3xl">
+                  {isCreating ? "Create New Sponsored Ad" : "Edit Sponsored Ad"}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Configure creative, destination, schedule, and location targeting in one place.
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={isCreating ? closeCreateModal : closeEditModal}
+                onClick={closeModal}
                 className="text-sm font-medium text-gray-500 hover:text-gray-700"
               >
                 Close
               </button>
             </div>
 
-            <div className="space-y-6">
-              <div>
-                <label className="block mb-2 text-sm font-medium text-gray-700">
-                  Product Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.productName}
-                  onChange={(e) => handleInputChange("productName", e.target.value)}
-                  className="w-full px-4 py-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
-                />
-              </div>
+            <div className="grid gap-8 lg:grid-cols-[1.3fr_0.9fr]">
+              <div className="space-y-6">
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div className="md:col-span-2">
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      Product Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => handleInputChange("name", e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
+                    />
+                  </div>
 
-              <div>
-                <label className="block mb-2 text-sm font-medium text-gray-700">
-                  Category
-                </label>
-                <input
-                  type="text"
-                  list="ad-categories"
-                  value={formData.category}
-                  onChange={(e) => handleInputChange("category", e.target.value)}
-                  className="w-full px-4 py-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
-                />
-                <datalist id="ad-categories">
-                  {categoryOptions.map((category) => (
-                    <option key={category} value={category} />
-                  ))}
-                </datalist>
-              </div>
+                  <div className="md:col-span-2">
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      Category
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.category}
+                      onChange={(e) => handleInputChange("category", e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
+                    />
+                  </div>
 
-              <div>
-                <label className="block mb-2 text-sm font-medium text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  rows="3"
-                  value={formData.description}
-                  onChange={(e) => handleInputChange("description", e.target.value)}
-                  className="w-full px-4 py-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
-                ></textarea>
-              </div>
+                  <div className="md:col-span-2">
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      Description
+                    </label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => handleInputChange("description", e.target.value)}
+                      rows={4}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-700">
-                    Price (USD)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => handleInputChange("price", e.target.value)}
-                    className="w-full px-4 py-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
-                  />
+                  <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      Price
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.price}
+                      onChange={(e) => handleInputChange("price", e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      URL
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.linkUrl}
+                      onChange={(e) => handleInputChange("linkUrl", e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.country}
+                      onChange={(e) => handleInputChange("country", e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      State / Division
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.state}
+                      onChange={(e) => handleInputChange("state", e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-700">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => handleInputChange("city", e.target.value)}
+                      className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
+                    />
+                  </div>
+
                 </div>
-                <div>
-                  <label className="block mb-2 text-sm font-medium text-gray-700">
-                    Destination URL
-                  </label>
-                  <input
-                    type="url"
-                    value={formData.url}
-                    onChange={(e) => handleInputChange("url", e.target.value)}
-                    className="w-full px-4 py-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#71ABE0]"
-                  />
-                </div>
               </div>
 
-              <div>
-                <label className="block mb-2 text-sm font-medium text-gray-700">
-                  Upload Creative
-                </label>
-                <div className="flex flex-col gap-3 p-4 border border-dashed rounded-xl border-blue-200 bg-blue-50/40">
-                  <div className="flex flex-wrap items-center gap-3">
+              <div className="space-y-6">
+                <div className="p-5 border border-blue-100 rounded-2xl bg-gradient-to-br from-blue-50 to-white">
+                  <label className="block mb-3 text-sm font-medium text-gray-700">
+                    Upload Creative
+                  </label>
+                  <div className="flex flex-col gap-4">
                     <label
                       htmlFor="ad-image-upload"
-                      className="px-4 py-2 text-sm font-semibold text-white rounded-md cursor-pointer bg-[#71ABE0] hover:bg-[#5a94c9]"
+                      className="inline-flex items-center justify-center px-4 py-3 text-sm font-semibold text-white rounded-xl cursor-pointer bg-[#71ABE0] hover:bg-[#5a94c9]"
                     >
                       Upload image
                     </label>
@@ -689,65 +686,63 @@ const AdsSetup = () => {
                       className="hidden"
                       onChange={handleImageUpload}
                     />
-                    {formData.image ? (
-                      <span className="text-xs text-gray-600">Image selected</span>
-                    ) : (
-                      <span className="text-xs text-gray-400">No image selected</span>
-                    )}
+                    <div className="overflow-hidden border border-gray-200 rounded-2xl bg-white">
+                      <img
+                        src={!previewFailed && formData.imageUrl ? formData.imageUrl : AD_IMAGE_PLACEHOLDER}
+                        alt="Ad preview"
+                        className="object-cover w-full aspect-[16/10]"
+                        onError={() => setPreviewFailed(true)}
+                      />
+                    </div>
                   </div>
-                  {formData.image && (
-                    <img
-                      src={formData.image}
-                      alt="Uploaded preview"
-                      className="object-cover w-full h-40 rounded-lg"
-                    />
-                  )}
                 </div>
-              </div>
 
-              <div>
-                <label className="block mb-3 text-sm font-medium text-gray-700">
-                  Status
-                </label>
-                <div className="flex items-center justify-between p-4 rounded-lg bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-10 h-10 bg-white rounded-full">
-                      <CiPower />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Activate Now?</p>
-                      <p className="text-xs text-gray-500">Turn on to make ad live immediately</p>
-                    </div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.isActive}
-                      onChange={(e) => handleInputChange("isActive", e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-[#71ABE0] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                <div className="p-5 rounded-2xl bg-gray-50">
+                  <label className="block mb-3 text-sm font-medium text-gray-700">
+                    Status
                   </label>
+                  <div className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-10 h-10 bg-gray-50 rounded-full">
+                        <CiPower />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Activate Now?</p>
+                        <p className="text-xs text-gray-500">Only active ads can appear in the feed</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.status === "active"}
+                        onChange={(e) =>
+                          handleInputChange("status", e.target.checked ? "active" : "expired")
+                        }
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-[#71ABE0] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex flex-col gap-3 pt-4 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={isCreating ? closeCreateModal : closeEditModal}
-                  className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 transition-colors bg-white border border-[#71ABE0] rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
+                <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="flex-1 px-4 py-3 text-sm font-medium text-gray-700 transition-colors bg-white border border-[#71ABE0] rounded-xl hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="flex-1 px-4 py-3 text-sm font-medium text-white bg-[#71ABE0] rounded-md hover:bg-[#5a94c9] transition-colors disabled:opacity-60"
-                >
-                  {isSaving ? "Saving..." : isCreating ? "Save Ad" : "Save"}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="flex-1 px-4 py-3 text-sm font-medium text-white bg-[#71ABE0] rounded-xl hover:bg-[#5a94c9] transition-colors disabled:opacity-60"
+                  >
+                    {isSaving ? "Saving..." : isCreating ? "Save Ad" : "Save Changes"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -769,7 +764,7 @@ const AdsSetup = () => {
               Do you want to delete this Ad?
             </h3>
             <p className="mb-6 text-sm text-center text-gray-500">
-              {deletingAd.productName || "Unnamed ad"} will be removed.
+              {deletingAd.name || "Unnamed ad"} will be removed.
             </p>
 
             <div className="flex justify-center gap-3">
