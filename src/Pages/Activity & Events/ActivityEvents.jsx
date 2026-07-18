@@ -115,7 +115,7 @@ const ActivityEvents = () => {
               endAt: item.endAt || null,
               location: item.location || "N/A",
               participantLimit: item.participantLimit ?? null,
-              category: item.type || "General",
+              category: item.category || "General",
               createdAt: item.createdAt || null,
             };
           })
