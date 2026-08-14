@@ -1,43 +1,4 @@
-# name: Dashboard CI
-
-# on:
-#   push:
-#     branches:
-#       - main
-#       - working
-#   pull_request:
-#     branches:
-#       - main
-#       - working
-
-# jobs:
-#   build-lint:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
-
-#       - name: Setup Node.js
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: 22
-#           cache: npm
-#           cache-dependency-path: package-lock.json
-
-#       - name: Install dependencies
-#         run: npm ci
-
-#       - name: Build
-#         run: npm run build
-
-#       - name: Lint
-#         run: npm run lint
-
-
-
-
-name: Dashboard CI
+name: Dashboard CI/CD
 
 on:
   push:
@@ -73,3 +34,33 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  deploy:
+    name: Deploy to EC2
+    needs: build-lint
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: stoneacademy-production-deploy
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy Docker stack
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            cd "${{ secrets.EC2_PROJECT_PATH }}"
+
+            git -C stoneacademy-backend fetch origin main
+            git -C stoneacademy-backend reset --hard origin/main
+
+            git -C stoneacademy-dashboard fetch origin main
+            git -C stoneacademy-dashboard reset --hard origin/main
+
+            docker compose up -d --build
+            docker compose ps
