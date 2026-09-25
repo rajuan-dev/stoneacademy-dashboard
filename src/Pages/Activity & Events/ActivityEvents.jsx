@@ -52,6 +52,25 @@ const normalizeStatusLabel = (item) => {
   return "Ongoing";
 };
 
+const COORDINATE_PAIR_PATTERN = /^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/;
+
+const formatLocation = (item) => {
+  const locationText =
+    typeof item.location === "string"
+      ? item.location.trim()
+      : item.location?.label?.trim();
+
+  if (locationText && !COORDINATE_PAIR_PATTERN.test(locationText)) {
+    return locationText;
+  }
+
+  const placeParts = [item.city, item.state, item.country]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean);
+
+  return placeParts.length > 0 ? placeParts.join(", ") : "N/A";
+};
+
 const ActivityEvents = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -113,7 +132,7 @@ const ActivityEvents = () => {
               description: item.description || "No description available.",
               startAt: item.startAt || null,
               endAt: item.endAt || null,
-              location: item.location || "N/A",
+              location: formatLocation(item),
               participantLimit: item.participantLimit ?? null,
               category: item.category || "General",
               createdAt: item.createdAt || null,
